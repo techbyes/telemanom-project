@@ -4,8 +4,7 @@
 
 ## Abstract
 
-For this project I prepared the Telemanom dataset for anomaly detection on spacecraft telemetry. The data comes from HuggingFace ([appleparan/telemanom](https://huggingface.co/datasets/appleparan/telemanom)) and is based on real NASA measurements from the SMAP satellite and the MSL (Curiosity) rover. The goal is to tell normal behavior apart from anomalies in long multivariate time series. In this repo I load the channels, handle missing values, apply StandardScaler, build fixed-length windows with a sliding window, and split the data in an autoencoder-safe way: training and validation come only from normal train CSVs (chronological val split, no shuffling), while the labeled test CSV is kept separate for evaluation. I also ran exploratory analysis in a Jupyter notebook. Model training is not included here—that is handled by another team member.
-
+For this project I prepared the Telemanom dataset for anomaly detection on spacecraft telemetry. The data comes from HuggingFace ([appleparan/telemanom](https://huggingface.co/datasets/appleparan/telemanom)) and is based on real NASA measurements from the SMAP satellite and the MSL (Curiosity) rover. The goal is to tell normal behavior apart from anomalies in long multivariate time series. In this repo I load the channels, handle missing values, apply StandardScaler, build fixed-length windows with a sliding window, and split the data in an autoencoder-safe way: training and validation come only from normal train CSVs (chronological val split, no shuffling), while the labeled test CSV is kept separate for evaluation. I also ran exploratory analysis in a Jupyter notebook. 
 ## Dataset Description
 
 **HuggingFace:** [appleparan/telemanom](https://huggingface.co/datasets/appleparan/telemanom)
