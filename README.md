@@ -1,4 +1,4 @@
-# Spacecraft Telemetry Anomaly Detection — Data & Preprocessing Module
+# Spacecraft Telemetry Anomaly Detection 
 
 **Author:** Esra (Dataset & Preprocessing)
 
