@@ -6,7 +6,6 @@ from typing import Iterable
 
 import numpy as np
 import pandas as pd
-from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler
 
 RANDOM_STATE = 42
@@ -20,7 +19,6 @@ class PreprocessConfig:
     sequence_length: int = 50
     stride: int = 10
     val_size: float = 0.15
-    test_size: float = 0.15
     random_state: int = RANDOM_STATE
     per_feature_normalize: bool = False
 
@@ -171,7 +169,12 @@ def build_channel_windows(
     anomaly_sequences: list[list[int]] | None,
     config: PreprocessConfig,
     scaler: TelemanomFeatureScaler,
-) -> tuple[np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Build windows from train and test streams separately (never concatenate).
+
+    Train windows come from normal-only train CSV data. Test windows and labels
+    come from the held-out test CSV (anomaly intervals when provided).
+    """
     train_scaled = scaler.transform(train_array)
     test_scaled = scaler.transform(test_array)
 
@@ -182,37 +185,27 @@ def build_channel_windows(
         test_scaled, config.sequence_length, config.stride
     )
 
-    train_labels = np.zeros(len(train_windows), dtype=np.int64)
     if anomaly_sequences:
         mask = anomaly_mask(len(test_scaled), anomaly_sequences)
         test_labels = window_binary_labels(mask, config.sequence_length, config.stride)
     else:
         test_labels = np.zeros(len(test_windows), dtype=np.int64)
 
-    return (
-        np.concatenate([train_windows, test_windows], axis=0),
-        np.concatenate([train_labels, test_labels], axis=0),
-    )
+    return train_windows, test_windows, test_labels
 
 
-def stratified_train_val_test_split(
+def chronological_train_val_split(
     x: np.ndarray,
-    y: np.ndarray,
     val_size: float = 0.15,
-    test_size: float = 0.15,
-    random_state: int = RANDOM_STATE,
-) -> tuple[np.ndarray, ...]:
-    if val_size + test_size >= 1:
-        raise ValueError("val_size + test_size must be < 1")
-
-    x_hold, x_test, y_hold, y_test = train_test_split(
-        x, y, test_size=test_size, random_state=random_state, stratify=y
-    )
-    relative_val = val_size / (1.0 - test_size)
-    x_train, x_val, y_train, y_val = train_test_split(
-        x_hold, y_hold, test_size=relative_val, random_state=random_state, stratify=y_hold
-    )
-    return x_train, x_val, x_test, y_train, y_val, y_test
+) -> tuple[np.ndarray, np.ndarray]:
+    """Split windows in time order: first (1 - val_size) for train, tail for validation."""
+    n = len(x)
+    if n == 0:
+        return x, x
+    split = int(n * (1.0 - val_size))
+    if n > 1:
+        split = min(max(split, 1), n - 1)
+    return x[:split], x[split:]
 
 
 def build_model_interface(

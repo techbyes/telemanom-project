@@ -19,11 +19,11 @@ from preprocessing import (
     TelemanomFeatureScaler,
     build_channel_windows,
     build_model_interface,
+    chronological_train_val_split,
     class_distribution,
     hf_split_to_array,
     pad_feature_dim,
     parse_anomaly_sequences,
-    stratified_train_val_test_split,
 )
 
 SplitName = Literal["train", "validation", "test"]
@@ -143,20 +143,35 @@ def build_telemanom_pipeline(
 
     scaler = TelemanomFeatureScaler(config.per_feature_normalize).fit(train_arrays)
 
-    all_x, all_y = [], []
+    train_parts: list[np.ndarray] = []
+    val_parts: list[np.ndarray] = []
+    test_parts: list[np.ndarray] = []
+    test_label_parts: list[np.ndarray] = []
+
     for train_arr, test_arr, sequences in channel_meta:
-        x_ch, y_ch = build_channel_windows(train_arr, test_arr, sequences, config, scaler)
-        if len(x_ch):
-            all_x.append(x_ch)
-            all_y.append(y_ch)
+        train_w, test_w, y_test = build_channel_windows(
+            train_arr, test_arr, sequences, config, scaler
+        )
+        if len(train_w):
+            tr, va = chronological_train_val_split(train_w, config.val_size)
+            train_parts.append(tr)
+            val_parts.append(va)
+        if len(test_w):
+            test_parts.append(test_w)
+            test_label_parts.append(y_test)
 
-    if not all_x:
-        raise RuntimeError("No windows created — check channels or window size.")
+    if not train_parts:
+        raise RuntimeError("No training windows created — check channels or window size.")
 
-    x = np.concatenate(all_x, axis=0)
-    y = np.concatenate(all_y, axis=0)
-    x_train, x_val, x_test, y_train, y_val, y_test = stratified_train_val_test_split(
-        x, y, config.val_size, config.test_size, config.random_state
+    x_train = np.concatenate(train_parts, axis=0)
+    x_val = np.concatenate(val_parts, axis=0) if val_parts else np.empty((0, *x_train.shape[1:]))
+    x_test = np.concatenate(test_parts, axis=0) if test_parts else np.empty((0, *x_train.shape[1:]))
+    y_train = np.zeros(len(x_train), dtype=np.int64)
+    y_val = np.zeros(len(x_val), dtype=np.int64)
+    y_test = (
+        np.concatenate(test_label_parts, axis=0)
+        if test_label_parts
+        else np.empty(0, dtype=np.int64)
     )
 
     return TelemanomPipelineResult(
@@ -169,7 +184,7 @@ def build_telemanom_pipeline(
         model_interface=build_model_interface(config, scaler, MAX_FEATURE_DIM),
         config=config,
         channel_ids=channels,
-        label_distribution=class_distribution(y),
+        label_distribution=class_distribution(y_test) if len(y_test) else class_distribution(y_train),
     )
 
 

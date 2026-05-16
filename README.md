@@ -4,7 +4,7 @@
 
 ## Abstract
 
-For this project I prepared the Telemanom dataset for anomaly detection on spacecraft telemetry. The data comes from HuggingFace ([appleparan/telemanom](https://huggingface.co/datasets/appleparan/telemanom)) and is based on real NASA measurements from the SMAP satellite and the MSL (Curiosity) rover. The goal is to tell normal behavior apart from anomalies in long multivariate time series. In this repo I load the channels, handle missing values, apply StandardScaler, build fixed-length windows with a sliding window, and split the data into train, validation, and test sets using stratified sampling because the classes are very imbalanced. I also ran exploratory analysis in a Jupyter notebook. 
+For this project I prepared the Telemanom dataset for anomaly detection on spacecraft telemetry. The data comes from HuggingFace ([appleparan/telemanom](https://huggingface.co/datasets/appleparan/telemanom)) and is based on real NASA measurements from the SMAP satellite and the MSL (Curiosity) rover. The goal is to tell normal behavior apart from anomalies in long multivariate time series. In this repo I load the channels, handle missing values, apply StandardScaler, build fixed-length windows with a sliding window, and split the data in an autoencoder-safe way: training and validation come only from normal train CSVs (chronological val split, no shuffling), while the labeled test CSV is kept separate for evaluation. I also ran exploratory analysis in a Jupyter notebook. Model training is not included here—that is handled by another team member.
 
 ## Dataset Description
 
@@ -21,7 +21,7 @@ Each channel is a multivariate time series: column `value` is the main signal, a
 
 ## Problem Definition
 
-The task is **anomaly detection in spacecraft telemetry** — finding time windows where the signal does not look normal. Because measurements depend on previous timesteps, the data has strong **temporal structure**. Another difficulty is **class imbalance**: anomaly segments are much rarer than normal ones, so a random train/test split would be misleading. My preprocessing focuses on consistent scaling, fixed window size, and stratified splitting.
+The task is **anomaly detection in spacecraft telemetry** — finding time windows where the signal does not look normal. Because measurements depend on previous timesteps, the data has strong **temporal structure**; windows must not be shuffled randomly. An autoencoder must train on **normal data only**, so train and test streams are never mixed. Validation is taken from the tail of each channel’s train windows in time order. The held-out test CSV (with labeled anomaly intervals) is used only for evaluation.
 
 ## Dataset Characteristics
 
@@ -43,7 +43,7 @@ Implemented in `preprocessing.py` and called from `data_loader.py`:
 3. **Padding** — SMAP (25 features) zero-padded to 55
 4. **Sequences** — sliding window, length 50, stride 10
 5. **Labels** — train windows → normal; test windows → anomaly if any timestep in window is labeled anomalous
-6. **Split** — stratified train / val / test (~70 / 15 / 15), `random_state=42`
+6. **Split** — train windows → chronological train / val (default 85% / 15% of each channel’s train stream); test windows → separate `X_test` / `y_test` from HF test CSVs (no concatenation, no shuffle)
 
 ## Exploratory Data Analysis
 
@@ -52,7 +52,7 @@ In `dataset_analysis.ipynb` I included:
 - Class distribution (normal vs anomaly, spacecraft breakdown)
 - Example time-series plot with anomaly regions highlighted
 - Sequence length statistics across channels
-- Imbalance ratio and check that splits stay stratified
+- Class imbalance on the test set; sanity check that train/val contain no anomaly labels
 
 ## Project Structure
 
@@ -85,7 +85,7 @@ First run downloads data from HuggingFace (needs internet). Run all cells in the
 - Loaded data directly from **HuggingFace** (no manual `.npy` download)
 - Used **real NASA telemetry** (SMAP + MSL), not a toy dataset
 - Full pipeline from raw channels to batched tensors
-- EDA with imbalance analysis to justify stratified splitting
+- EDA with imbalance analysis on the labeled test stream; leakage-safe splits for autoencoder training
 
 ## Reference
 
